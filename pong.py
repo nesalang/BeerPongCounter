@@ -196,10 +196,10 @@ class Game:
         
 
 
-#app = App(title="Hello World")
-#redTeamScore = ScoreLabelsRight(app)
-#blueTeamScore = ScoreLabelsLeft(app)
-#gameClock = ClockLabel(app, 5)
+app = App(title="Hello World")
+redTeamScore = ScoreLabelsRight(app)
+blueTeamScore = ScoreLabelsLeft(app)
+gameClock = ClockLabel(app, 5)
 
-#app.display() 
+app.display() 
                             
