@@ -1,32 +1,33 @@
 import sys
-from guizero import App, Text
+from guizero import App, Text, PushButton
 class ClockLabel:
     def __init__(self, app, timeString, clockEventHandler, x, y):
-        self.clockTickCounter = ClockTicksCounter(timeString)
-        self.clock = Text(app, text = self.clockTickCounter.GetFormatedTime(), size=150, font = 'Times New Roman', bg='white', width = 8, height = 3, grid=[x, y + 1, 1, 2])
+        self.clock = Text(app, text = timeString, size=150, font = 'Times New Roman', bg='white', width = 8, height = 3, grid=[x, y + 1, 1, 2])
         self.clock.repeat(1000, self.UpdateClockDisplay)
         self.clockEventHandler = clockEventHandler
 
     def UpdateClockDisplay(self):
-        self.clockEventHandler();
+        self.clockEventHandler()
     
     def UpdateClock(self, value):
         self.clock.value = value 
 
-    def ResetClock(self):
-        self.clockTickCounter.ResetTicksCounter()
-
     def DisableClock(self):
         self.clock.disable()
+        self.clock.cancel(self.UpdateClockDisplay)
+
+    def EnableClock(self):
+        self.clock.enable()
+        self.clock.repeat(1000, self.UpdateClockDisplay)
 
 class ScoreLabels:
     def __init__(self, app, color, alignment, scoreEventHandler, x, y):
-        self.score = Text(app, text=1, size=150, font ="Times New Roman", color= color, grid=[x, y], width = 4)
+        self.score = Text(app, text=0, size=150, font ="Times New Roman", color= color, grid=[x, y], width = 4)
         self.scoreEventHandler = scoreEventHandler
-        self.RegisterCallBack()
+        self.score.disable()
 
     def ResetScore(self):
-        self.score.value = 0
+        self.DisableDisplay()
 
     def UpdateScore(self, score):
         self.score.value = score
@@ -35,8 +36,12 @@ class ScoreLabels:
         self.score.repeat(1000, self.scoreEventHandler)
 
     def DisableDisplay(self):
-        self.score.cancel(self.scoreEventHandler)
+        #self.score.cancel(self.scoreEventHandler)
         self.score.disable()
+
+    def EnableDisplay(self):
+        self.score.enable()
+        #self.RegisterCallBack()
          
 class ScoreLabelsLeft(ScoreLabels):
     def __init__(self, app, eventHandler, x, y):
@@ -45,8 +50,15 @@ class ScoreLabelsLeft(ScoreLabels):
 
 class ScoreLabelsRight(ScoreLabels):
     def __init__(self, app, eventHandler, x, y):
-        self.indicator = Text(app, text='.', size=150, font ="Times New Roman", color= 'black', grid=[x, y], width = 4)
+        self.indicator = Text(app, text='', size=150, font ="Times New Roman", color= 'black', grid=[x, y], width = 4)
         super().__init__(app, 'red', 'right', eventHandler, x, y + 1)
+    def DisableDisplay(self):
+        super().DisableDisplay()
+        self.indicator.value = ''
+
+    def EnableDisplay(self):
+        super().EnableDisplay()
+        self.indicator.value = '.'
 
 class ClockTicksCounter:
     def __init__(self, time):
@@ -141,55 +153,49 @@ class Round:
 
 class Game:
     def __init__(self, time, rounds):
-        self.time = time
+        self.time = ClockTicksCounter(time)
         self.numberOfRounds = rounds
-        self.currentRoundIndex = 0
-        self.rounds = [Round(Team("Red"), Team("Blue"), ClockTicksCounter(time)) for _ in range(rounds)]
+        self.currentRoundIndex = -1 
+        self.RedTeam = Team("Red")
+        self.BlueTeam = Team("Blue")
         self.hasNewRoundStarted = False
         self.app = App(title="Welcome To Pong Game!!!", layout='grid', width = 2200, height = 800)
-        self.redTeamScore = ScoreLabelsRight(self.app, self.UpdateScoreBoard, 0, 0)
-        self.blueTeamScore = ScoreLabelsLeft(self.app, self.UpdateScoreBoard, 0, 1)
-        self.redTeamScore1 = ScoreLabelsRight(self.app, self.UpdateScoreBoard, 1, 0)
-        self.blueTeamScore1 = ScoreLabelsLeft(self.app, self.UpdateScoreBoard, 1, 1)
-        self.redTeamScore2 = ScoreLabelsRight(self.app, self.UpdateScoreBoard, 2, 0)
-        self.blueTeamScore2 = ScoreLabelsLeft(self.app, self.UpdateScoreBoard, 2, 1)
-        self.gameClockDisplay = ClockLabel(self.app, time, self.ManageGameTime, 3, 0)
-        self.ScoreDisplays= { "Red" : self.redTeamScore, "Blue" : self.blueTeamScore };
-
-    def ResetUI(self):
-        self.redTeamScore.ResetScore()
-        self.blueTeamScore.ResetScore()
-        self.gameClockDisplay.ResetClock()
-
-    def StartNewRound(self):
-        print('a')
-        if self.currentRoundIndex < len(self.rounds) - 1:
-            print('b')
-            self.currentRoundIndex += 1
-            self.ResetUI()
-            self.hasNewRoundStarted = True
+        self.RedTeamScoreBoards = [ScoreLabelsRight(self.app, self.UpdateScoreBoard, i, 0) for i in range(3)]
+        self.BlueTeamScoreBoards = [ScoreLabelsLeft(self.app, self.UpdateScoreBoard, i, 1) for i in range(3)]
+        self.gameClockDisplay = ClockLabel(self.app, self.time.GetFormatedTime(), self.ManageGameTime, 3, 0)
+        self.gameClockDisplay.DisableClock()
+        self.StartStopButton = PushButton(self.app, text = 'Start Next Round', command= self.StartNewRound, grid = [0, 3])
+        self.BeginNewGame = PushButton(self.app, text = 'Start New Game', grid = [1, 3])
         self.app.display()
 
+    def UpdatePreviousRound(self) :
+        if self.currentRoundIndex > 0:
+            self.RedTeamScoreBoards[self.currentRoundIndex - 1].DisableDisplay()
+            self.BlueTeamScoreBoards[self.currentRoundIndex - 1].DisableDisplay()
+        self.gameClockDisplay.DisableClock()
+        self.time.ResetTicksCounter()
+
+    def StartNewRound(self):
+        if (self.currentRoundIndex < 2):
+            self.UpdatePreviousRound()
+            self.currentRoundIndex += 1
+            self.gameClockDisplay.EnableClock()
+            self.BlueTeamScoreBoards[self.currentRoundIndex].EnableDisplay()
+            self.RedTeamScoreBoards[self.currentRoundIndex].EnableDisplay()
+
     def ManageGameTime(self):
-        if self.hasNewRoundStarted == False:
-            return
-        currentRound = self.rounds[self.currentRoundIndex]
-        currentRound.UpdateGameTime()
-        self.gameClockDisplay.UpdateClock(currentRound.GetCurrentFormattedGameTime())
-        if currentRound.IsGameOver():
-            winningTeam = currentRound.GetWinner()
-            self.hasNewRoundStarted = False
+        self.time.UpdateTime()
+        self.gameClockDisplay.UpdateClock(self.time.GetFormatedTime())
+        if self.time.HasTimeExpired():
             self.gameClockDisplay.DisableClock()
-            self.redTeamScore.DisableDisplay()
-            self.blueTeamScore.DisableDisplay()
-            # Update UI to notify Winner
+            self.BlueTeamScoreBoards[self.currentRoundIndex].DisableDisplay()
+            self.RedTeamScoreBoards[self.currentRoundIndex].DisableDisplay()
+        else:
+            self.UpdateScoreBoard()
 
     def UpdateScoreBoard(self):
-        currentRound = self.rounds[self.currentRoundIndex]
-        if self.hasNewRoundStarted and not currentRound.IsGameOver():
-            for eachTeam in currentRound:
-                # get score label and update the score
-                self.ScoreDisplays[eachTeam.GetTeamName()].UpdateScore(eachTeam.GetScore())
+        self.BlueTeamScoreBoards[self.currentRoundIndex].UpdateScore(self.RedTeam.GetScore())
+        self.RedTeamScoreBoards[self.currentRoundIndex].UpdateScore(self.BlueTeam.GetScore())
 
     def ComputeGameScoresForTeams(self):
         scores = {}
@@ -217,7 +223,6 @@ class Game:
         
 def main():
     game = Game(1, 3)
-    game.StartNewRound()
     return 0
 
 if __name__ == '__main__':
