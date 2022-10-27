@@ -1,8 +1,33 @@
 import sys
+
+from gpiozero import MotionSensor
+
 from guizero import App, Text, PushButton
+
+import threading
+
+class PongSensor:
+    def __init__(self, pin):
+        self.sensor = MotionSensor(17, pull_up = None, active_state = False)
+        self.counts = 0
+        self.thread = threading.Thread(target=self.Sense)
+        self.thread.start()
+                                       
+    def Sense(self):        
+        while True:
+            self.sensor.wait_for_motion()
+            self.counts += 1            
+            self.sensor.wait_for_no_motion()
+    
+    def GetCounts(self):
+        return self.counts
+    
+    def ResetCounter(self):
+        self.counts = 0
+
 class ClockLabel:
     def __init__(self, app, timeString, clockEventHandler, x, y):
-        self.clock = Text(app, text = timeString, size=150, font = 'Times New Roman', bg='white', width = 8, height = 3, grid=[x, y + 1, 1, 2])
+        self.clock = Text(app, text = timeString, size=100, font = 'Times New Roman', bg='white', width = 7, height = 3, grid=[x, y + 1, 1, 2])
         self.clock.repeat(1000, self.UpdateClockDisplay)
         self.clockEventHandler = clockEventHandler
 
@@ -83,28 +108,39 @@ class ClockTicksCounter:
         timeString = minutesString + ' : ' + secondsInString 
         return timeString
 
-    #def GetUpdatedTime(self):
-    #    self.UpdateTime()
-    #    return self.GetFormatedTime()
-
 class ScoreSource:
-    def __init__(self):
+    def __init__(self, team):
+        self.team = team
+        if (self.team == 'Red'):
+            self.pongSensor = PongSensor(17)
         self.count = 0
 
     def GetScore(self):
-        self.count += 1
-        return self.count
+        if (self.team == 'Red'):
+            return self.pongSensor.GetCounts()
+        else:
+            self.count += 1
+            return self.count
+    
+    def Reset(self):
+        if (self.team == 'Red'):
+            return self.pongSensor.ResetCounter()
+        else:
+            self.count = 0
 
 class Team:
     def __init__(self, teamName):
         self.name = teamName
-        self.scoreSource = ScoreSource()
+        self.scoreSource = ScoreSource(teamName)
 
     def GetScore(self):
         return self.scoreSource.GetScore()
 
     def GetTeamName(self):
         return self.name
+    
+    def Reset(self):
+        self.scoreSource.Reset()
 
 class Round:
     def __init__(self, team0, team1, gameClock): 
@@ -169,9 +205,9 @@ class Game:
         self.app.display()
 
     def UpdatePreviousRound(self) :
-        if self.currentRoundIndex > 0:
-            self.RedTeamScoreBoards[self.currentRoundIndex - 1].DisableDisplay()
-            self.BlueTeamScoreBoards[self.currentRoundIndex - 1].DisableDisplay()
+        if self.currentRoundIndex >= 0:
+            self.RedTeamScoreBoards[self.currentRoundIndex].DisableDisplay()
+            self.BlueTeamScoreBoards[self.currentRoundIndex].DisableDisplay()
         self.gameClockDisplay.DisableClock()
         self.time.ResetTicksCounter()
 
@@ -182,6 +218,8 @@ class Game:
             self.gameClockDisplay.EnableClock()
             self.BlueTeamScoreBoards[self.currentRoundIndex].EnableDisplay()
             self.RedTeamScoreBoards[self.currentRoundIndex].EnableDisplay()
+            self.RedTeam.Reset()
+            self.BlueTeam.Reset()
 
     def ManageGameTime(self):
         self.time.UpdateTime()
